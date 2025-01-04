@@ -3,6 +3,10 @@ import os
 from huggingface_hub import hf_hub_download
 from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
 from dotenv import load_dotenv
+import re
+import spacy
+
+nlp = spacy.load("it_core_news_sm")
 
 # Carica variabili d'ambiente dal file .env
 load_dotenv()
@@ -24,25 +28,6 @@ def download_model_files(model_id, file_names, token):
         )
         print(f"Downloaded {file} to {downloaded_model_path}")
 
-def download_model_files(model_id: str, model_files: str):
-    """
-    Scarica i file necessari per un modello specificato tramite Hugging Face Hub.
-
-    Args:
-    - model_id (str): l'ID del modello.
-    - model_files (str): stringa con i nomi dei file separati da virgola.
-
-    Restituisce una lista con i percorsi dei file scaricati.
-    """
-    downloaded_files = []
-    for file_name in model_files.split(","):
-        try:
-            file_path = hf_hub_download(repo_id=model_id, filename=file_name)
-            downloaded_files.append(file_path)
-        except Exception as e:
-            print(f"Errore nel download del file {file_name} per il modello {model_id}: {e}")
-    return downloaded_files
-
 def load_model_and_files(model_id: str, model_files: str):
     """
     Carica un modello e il tokenizer da Hugging Face Hub.
@@ -54,8 +39,6 @@ def load_model_and_files(model_id: str, model_files: str):
     Restituisce:
     - pipeline: pipeline per il riconoscimento entità (NER).
     """
-    # Scarica i file necessari per il modello
-    downloaded_files = download_model_files(model_id, model_files)
 
     # Carica il modello e il tokenizer dai file scaricati
     try:
@@ -143,3 +126,53 @@ def merge_results(model_1_results, model_2_results):
     merged_results = [{'word': word, 'entity': values['entity'], 'score': values['score']} for word, values in merged_dict.items()]
     
     return merged_results
+
+def preprocess_text(text):
+    """
+    Preprocessa un testo per ottimizzare l'analisi tramite NER.
+    Esegue:
+    1. Conversione a minuscolo.
+    2. Rimozione di emoji in formato `:nome_emoji:`.
+    3. Rimozione di caratteri speciali e simboli, mantenendo punteggiatura utile.
+    4. Sostituzione di spazi multipli con un singolo spazio.
+    """
+    # 1. Conversione a minuscolo
+    text = text.lower()
+    
+    # 2. Rimozione di emoji in formato `:nome_emoji:`
+    text = re.sub(r":\w+:", " ", text)
+    
+    # 3. Rimozione di caratteri speciali e simboli (mantieni punteggiatura utile)
+    text = re.sub(r"[^\w\s.,!?']", " ", text)
+    
+    # 4. Sostituzione di spazi multipli con un singolo spazio
+    text = re.sub(r"\s+", " ", text).strip()
+    
+    return text
+
+def preprocess_stopwords(text):
+    """
+    Togli le stop-words, ma preserva gli apostrofi in espressioni composte.
+    """
+    doc = nlp(text)
+    
+    # Mantieni i token che non sono stopword e non sono apostrofi singoli
+    processed_tokens = [token.text for token in doc if not token.is_stop or "'" in token.text]
+    
+    return " ".join(processed_tokens)
+
+def preprocess_lemmatization(text):
+    """
+    Lemmatizza il testo mantenendo anche le stop-words e rimuovendo quelle 
+    che non sono utili senza eliminarle tramite il `token.is_stop`. Se il lemma 
+    è vuoto, mantieni la parola originale.
+    """
+    doc = nlp(text)
+    
+    # Mantieni tutte le parole, ma solo quelle non stop-words
+    processed_tokens = [token.lemma_ if token.lemma_ != "-PRON-" else token.text for token in doc]
+    
+    # Se il lemma è vuoto o non valido, mantieni la parola originale
+    processed_tokens = [token.lemma_ if token.lemma_ != "-PRON-" and token.lemma_ else token.text for token in doc]
+    
+    return " ".join(processed_tokens)
