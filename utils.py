@@ -1,7 +1,7 @@
 # utils.py
 import os
 from huggingface_hub import hf_hub_download
-from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
+from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification, MarianMTModel, MarianTokenizer, AutoModelForSequenceClassification
 from dotenv import load_dotenv
 import re
 import spacy
@@ -53,44 +53,66 @@ def download_model_files(model_id, file_names, token):
         )
         print(f"Downloaded {file} to {downloaded_model_path}")
 
-def load_model_and_files(model_id: str, model_files: str):
+def load_model_and_files(model_id: str, model_type: str = "ner"):
     """
     Carica un modello e il tokenizer da Hugging Face Hub.
-
+    
     Args:
     - model_id (str): l'ID del modello da caricare.
-    - model_files (str): i file del modello da scaricare.
-
+    - model_type (str): il tipo di modello da caricare. Valori supportati:
+        * "ner" per riconoscimento di entità.
+        * "translation" per traduzione.
+        * "classification" per classificazione del testo.
+    
     Restituisce:
-    - pipeline: pipeline per il riconoscimento entità (NER).
+    - Una pipeline o una funzione di traduzione, a seconda del tipo di modello.
     """
-
-    # Carica il modello e il tokenizer dai file scaricati
     try:
-        model = AutoModelForTokenClassification.from_pretrained(model_id)
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        return pipeline("ner", model=model, tokenizer=tokenizer)
+        if model_type == "ner":
+            # Carica il modello e tokenizer per NER
+            model = AutoModelForTokenClassification.from_pretrained(model_id)
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+            return pipeline("ner", model=model, tokenizer=tokenizer)
+        
+        elif model_type == "translation":
+            # Carica il modello e tokenizer per traduzione
+            model = MarianMTModel.from_pretrained(model_id)
+            tokenizer = MarianTokenizer.from_pretrained(model_id)
+            
+            # Definizione di una funzione per eseguire la traduzione
+            def translate_text(text):
+                # Tokenizza il testo
+                inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+                # Ottieni la traduzione
+                translated = model.generate(**inputs)
+                # Decodifica la traduzione
+                return tokenizer.decode(translated[0], skip_special_tokens=True)
+            
+            return translate_text
+        
+        elif model_type == "classification":
+            # Carica il modello e tokenizer per classificazione del testo
+            model = AutoModelForSequenceClassification.from_pretrained(model_id)
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+            # Restituisce una pipeline per classificazione del testo
+            return pipeline(task="text-classification", model=model, tokenizer=tokenizer, top_k=None)
+        
+        else:
+            raise ValueError(f"Tipo di modello '{model_type}' non supportato.")
+    
     except Exception as e:
         print(f"Errore nel caricamento del modello {model_id}: {e}")
         return None
 
 def get_model_details():
-    """
-    Restituisce gli ID dei modelli e i file associati dal file .env.
-    La funzione può gestire un numero variabile di modelli.
-    """
+    load_dotenv()  # Carica le variabili dal file .env
     models = []
-    
-    # Numero di modelli (ad esempio, 1, 2, 3, ...), puoi modificarlo come necessario
-    model_count = 10  # Cambia questo numero in base ai tuoi modelli
-
-    for i in range(1, model_count + 1):
+    for i in range(1, 5):  # Supponendo di avere 4 modelli
         model_id = os.getenv(f"MODEL_{i}_ID")
+        model_type = os.getenv(f"MODEL_{i}_TYPE")
         model_files = os.getenv(f"MODEL_{i}_FILES")
-        
-        if model_id and model_files:
-            models.append((model_id, model_files))
-    
+        if model_id and model_type and model_files:
+            models.append((model_id, model_type, model_files.split(',')))
     return models
 
 def reconstruct_word(tokens):
@@ -208,3 +230,56 @@ def preprocess_lemmatization(text):
     processed_tokens = [token.lemma_ if token.lemma_ != "-PRON-" and token.lemma_ else token.text for token in doc]
     
     return " ".join(processed_tokens)
+
+
+def traduci_output(output):
+    """
+    Traduce i label di emozioni da inglese a italiano nell'output di un modello.
+    
+    Args:
+    - output (list): Lista contenente i dizionari con le emozioni e i punteggi.
+    
+    Restituisce:
+    - list: Lista con i label tradotti in italiano.
+    """
+    # Dizionario di traduzione dei label direttamente nella funzione
+    traduzione_label = {
+        'desire': 'desiderio',
+        'curiosity': 'curiosità',
+        'optimism': 'ottimismo',
+        'neutral': 'neutrale',
+        'confusion': 'confusione',
+        'caring': 'cura',
+        'approval': 'approvazione',
+        'disappointment': 'delusione',
+        'sadness': 'tristezza',
+        'love': 'amore',
+        'admiration': 'ammirazione',
+        'disapproval': 'disapprovazione',
+        'excitement': 'eccitazione',
+        'realization': 'realizzazione',
+        'annoyance': 'fastidio',
+        'surprise': 'sorpresa',
+        'fear': 'paura',
+        'remorse': 'rimorso',
+        'nervousness': 'nervosismo',
+        'joy': 'gioia',
+        'anger': 'rabbia',
+        'amusement': 'divertimento',
+        'disgust': 'disgusto',
+        'grief': 'lutto',
+        'gratitude': 'gratitudine',
+        'relief': 'rilievo',
+        'embarrassment': 'imbarazzo',
+        'pride': 'orgoglio'
+    }
+
+    # Controlla che l'output sia nel formato corretto
+    if isinstance(output, list) and all(isinstance(item, dict) for item in output):
+        for emozione in output:
+            emozione['label'] = traduzione_label.get(emozione['label'], emozione['label'])  # Se il label non è nel dizionario, rimane invariato
+    else:
+        print("Attenzione: l'output non è nel formato previsto. Assicurati che sia una lista di dizionari.")
+
+    return output
+    
