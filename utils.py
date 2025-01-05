@@ -11,6 +11,31 @@ nlp = spacy.load("it_core_news_sm")
 # Carica variabili d'ambiente dal file .env
 load_dotenv()
 
+def load_models():
+    models = {}
+    model_number = 1
+    
+    # Cerca le variabili MODEL_X_ID e MODEL_X_FILES nel file .env
+    while True:
+        model_id_key = f"MODEL_{model_number}_ID"
+        model_files_key = f"MODEL_{model_number}_FILES"
+        
+        # Se le variabili non esistono, esci dal ciclo
+        if model_id_key not in os.environ or model_files_key not in os.environ:
+            break
+        
+        # Carica l'ID del modello e i relativi file
+        model_id = os.getenv(model_id_key)
+        model_files = os.getenv(model_files_key).split(",")
+        
+        # Aggiungi il modello al dizionario
+        models[model_id] = model_files
+        
+        # Incrementa il numero del modello
+        model_number += 1
+
+    return models
+
 def download_model_files(model_id, file_names, token):
     """
     Scarica i file associati a un modello specificato da Hugging Face Hub.
@@ -52,14 +77,21 @@ def load_model_and_files(model_id: str, model_files: str):
 def get_model_details():
     """
     Restituisce gli ID dei modelli e i file associati dal file .env.
+    La funzione può gestire un numero variabile di modelli.
     """
-    model_1_id = os.getenv("MODEL_1_ID")
-    model_1_files = os.getenv("MODEL_1_FILES")
-
-    model_2_id = os.getenv("MODEL_2_ID")
-    model_2_files = os.getenv("MODEL_2_FILES")
+    models = []
     
-    return (model_1_id, model_1_files), (model_2_id, model_2_files)
+    # Numero di modelli (ad esempio, 1, 2, 3, ...), puoi modificarlo come necessario
+    model_count = 10  # Cambia questo numero in base ai tuoi modelli
+
+    for i in range(1, model_count + 1):
+        model_id = os.getenv(f"MODEL_{i}_ID")
+        model_files = os.getenv(f"MODEL_{i}_FILES")
+        
+        if model_id and model_files:
+            models.append((model_id, model_files))
+    
+    return models
 
 def reconstruct_word(tokens):
     """

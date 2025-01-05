@@ -1,4 +1,4 @@
-from utils import download_model_files
+from utils import download_model_files, load_models
 import os
 from dotenv import load_dotenv
 
@@ -10,10 +10,8 @@ load_dotenv()
 token = os.getenv("HUGGINGFACE_TOKEN")
 
 # Modelli e relativi file da scaricare, presi dal file .env
-models = {
-    os.getenv("MODEL_1_ID"): os.getenv("MODEL_1_FILES").split(","),
-    os.getenv("MODEL_2_ID"): os.getenv("MODEL_2_FILES").split(",")
-}
+if __name__ == "__main__":
+    models = load_models()
 
 # Scarica i file per ogni modello
 if __name__ == "__main__":
