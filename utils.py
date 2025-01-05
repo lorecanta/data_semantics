@@ -282,4 +282,70 @@ def traduci_output(output):
         print("Attenzione: l'output non è nel formato previsto. Assicurati che sia una lista di dizionari.")
 
     return output
+
+def process_text_with_models(text, model_1_pipeline, model_2_pipeline, model_1_id, model_2_id):
+    """
+    Esegue l'analisi di un messaggio usando due modelli, ricostruisce i risultati e li unisce.
+
+    Args:
+        text (str): Il messaggio da analizzare.
+        model_1_pipeline: La pipeline del primo modello.
+        model_2_pipeline: La pipeline del secondo modello.
+        model_1_id (str): L'ID del primo modello.
+        model_2_id (str): L'ID del secondo modello.
+        reconstruct_word (function): Funzione per ricostruire parole complete dai sub-token.
+        merge_results (function): Funzione per unire i risultati dei due modelli, dando preferenza al secondo modello.
+
+    Returns:
+        list: Lista di risultati finali dopo l'elaborazione e l'unione delle entità.
+    """
     
+    # 1. Esegui l'analisi solo se le pipeline sono caricate correttamente
+    result_1 = []
+    if model_1_pipeline:
+        result_1 = model_1_pipeline(text)
+    else:
+        print(f"Errore nel caricare la pipeline per il modello 1: {model_1_id}")
+
+    result_2 = []
+    if model_2_pipeline:
+        result_2 = model_2_pipeline(text)
+    else:
+        print(f"Errore nel caricare la pipeline per il modello 2: {model_2_id}")
+
+    # 2. Ricostruisci i risultati dai sub-token in parole complete per entrambi i modelli
+    reconstructed_model_1_results = reconstruct_word(result_1) if result_1 else []
+    reconstructed_model_2_results = reconstruct_word(result_2) if result_2 else []
+
+    # 3. Unisci i risultati dei due modelli, con la preferenza per il modello 2
+    final_results = merge_results(reconstructed_model_1_results, reconstructed_model_2_results)
+
+    return final_results
+    
+
+def process_emotions_and_translate(text, model_4_pipeline, model_3_pipeline):
+    """
+    Esegue la traduzione del testo, la classificazione delle emozioni nel testo tradotto
+    e la traduzione dei label delle emozioni in italiano.
+
+    Args:
+        text (str): Il messaggio da elaborare.
+        model_4_pipeline: La pipeline per la traduzione del testo.
+        model_3_pipeline: La pipeline per la classificazione delle emozioni.
+        traduci_output (function): Funzione per tradurre i label delle emozioni in italiano.
+
+    Returns:
+        list: Lista di emozioni con i label tradotti in italiano.
+    """
+    
+    # 1. Tradurre il testo con il modello di traduzione
+    text_tradotto = model_4_pipeline(text)
+    
+    # 2. Classificare le emozioni nel testo tradotto
+    output_classificazione = model_3_pipeline(text_tradotto)
+    
+    # 3. Tradurre i label delle emozioni in italiano
+    output_tradotto = [traduci_output(emozione) for emozione in output_classificazione]
+    
+    # 4. Restituire il risultato finale
+    return output_tradotto
