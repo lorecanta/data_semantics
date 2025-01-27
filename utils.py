@@ -128,7 +128,7 @@ def reconstruct_word(tokens):
     words = []
     current_word = ''
     current_entity = None
-    current_score = None
+    current_score = -float('inf')  # Inizializza con un punteggio molto basso
     
     for token in tokens:
         word = token['word']
@@ -138,15 +138,16 @@ def reconstruct_word(tokens):
         # Se il sub-token è un sub-token (inizia con '##'), uniscilo con il token precedente
         if word.startswith('##'):
             current_word += word[2:]  # Rimuove '##' e aggiunge il sub-token
-            current_score = max(current_score, score)  # Mantiene il punteggio massimo
+            if score is not None:  # Verifica che score non sia None prima del confronto
+                current_score = max(current_score, score)  # Mantiene il punteggio massimo
         else:
             if current_word:
-                # Aggiungi la parola finale con il punteggio associato
+                # Aggiungi la parola finale con l'entità e il punteggio associato
                 words.append({'entity': current_entity, 'word': current_word, 'score': current_score})
             
             current_word = word
             current_entity = entity
-            current_score = score  # Assegna il punteggio del nuovo token
+            current_score = score if score is not None else -float('inf')  # Inizializza il punteggio se score è None
             
     # Aggiungi l'ultimo token
     if current_word:
