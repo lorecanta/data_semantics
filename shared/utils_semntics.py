@@ -5,6 +5,17 @@ from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassificatio
 from dotenv import load_dotenv
 import re
 import spacy
+from pymongo import MongoClient
+
+# Modelli e file da scaricare
+MODEL_1_ID="osiria/bert-italian-uncased-ner"
+
+MODEL_2_ID="IVN-RIN/MedPsyNIT"
+
+MODEL_3_ID="SamLowe/roberta-base-go_emotions"
+
+MODEL_4_ID="Helsinki-NLP/opus-mt-it-en"
+
 
 nlp = spacy.load("it_core_news_sm")
 
@@ -350,3 +361,107 @@ def process_emotions_and_translate(text, model_4_pipeline, model_3_pipeline):
     
     # 4. Restituire il risultato finale
     return output_tradotto
+
+def recupera_autori(autori_collection):
+    # Recupera la lista di autori dal database
+    autori_cursor = autori_collection.find()
+    autori = []
+    
+    for autore in autori_cursor:
+        nome_originale = autore["author"]  # Supponendo che il campo del nome dell'autore sia "author"
+        autori.append(nome_originale)  # Aggiungi il nome originale
+        
+        # Genera una versione pulita del nome senza caratteri speciali e numeri
+        nome_pulito = re.sub(r'[^a-zA-Z]', '', nome_originale)
+        if nome_pulito:  # Evita di aggiungere stringhe vuote
+            autori.append(nome_pulito)
+    
+    return autori
+
+# Funzione per rimuovere emoji o stringhe delimitate da ':'
+def rimuovi_emoji(messaggio):
+    # Rimuove le sottostringhe racchiuse tra due punti, ad esempio :smiling_face:
+    return re.sub(r':\w+?:', '', messaggio)
+
+
+def load_models():
+    # Recupera i dettagli dei modelli
+    model_details = get_model_details()
+    
+    # Assegna manualmente le tuple a separate
+    (model_1_id, model_1_type, model_1_files), \
+    (model_2_id, model_2_type, model_2_files), \
+    (model_3_id, model_3_type, model_3_files), \
+    (model_4_id, model_4_type, model_4_files) = model_details
+    
+    # Usa i dettagli per caricare i modelli
+    print(f"Caricamento modello 1: {model_1_id}")
+    model_1_pipeline = load_model_and_files(model_1_id, model_type=model_1_type)
+    
+    print(f"Caricamento modello 2: {model_2_id}")
+    model_2_pipeline =load_model_and_files(model_2_id, model_type=model_2_type)
+    
+    print(f"Caricamento modello 3: {model_3_id}")
+    model_3_pipeline = load_model_and_files(model_3_id, model_type=model_3_type)
+    
+    print(f"Caricamento modello 4: {model_4_id}")
+    model_4_pipeline = load_model_and_files(model_4_id, model_type=model_4_type)
+    
+    return model_1_pipeline, model_2_pipeline, model_3_pipeline, model_4_pipeline, model_1_id, model_2_id
+
+def analisi_semantica(text, autori, model_1_pipeline, model_2_pipeline, model_3_pipeline, model_4_pipeline, model_1_id, model_2_id):
+    # Supponendo che i risultati siano già ottenuti
+    risultato_ner = process_text_with_models(text, model_1_pipeline, model_2_pipeline, model_1_id, model_2_id)
+    risultato_sentiment = process_emotions_and_translate(text, model_4_pipeline, model_3_pipeline)[0]
+
+    # Filtrare i sentimenti per raggiungere uno score cumulativo di almeno 0.95
+    selected_sentiments = [sentiment for sentiment in risultato_sentiment if sentiment["score"] > 0.15]
+    
+    # Controlla se la lista non è vuota
+    if risultato_ner:
+        for item in risultato_ner:
+            item["score"] = float(item["score"])  # Converte np.float32 in float64
+            if item["word"] in autori:
+                item["entity"] = "PER"
+    else:
+        print("La lista 'ner' è vuota!")
+
+    risultato_sentiment = {item['label']: item['score'] for item in risultato_sentiment}
+    selected_sentiments = {item['label']: item['score'] for item in selected_sentiments}
+
+    return {
+        "ner": risultato_ner,
+        "sentiment_analysis_relevant": selected_sentiments,
+        "sentiment_analysis_full": risultato_sentiment
+    }
+
+
+def integra_database(nome_db):
+    client = MongoClient("mongodb://localhost:27017/")
+    db = client[nome_db]
+    collection = db["post"]
+    autori_collection = db["autori"]
+    
+    autori = recupera_autori(autori_collection)
+    cursor = collection.find().batch_size(50)
+    
+    models_pipelines = load_models()
+    model_1_pipeline, model_2_pipeline, model_3_pipeline, model_4_pipeline, model_1_id, model_2_id  = models_pipelines
+    
+    for documento in cursor:
+        try:
+            messaggio = documento.get("message")
+            if not messaggio:
+                continue
+            
+            messaggio_pulito = rimuovi_emoji(messaggio)
+            print(messaggio_pulito)
+            
+            risultato = analisi_semantica(messaggio_pulito, autori, model_1_pipeline, model_2_pipeline, model_3_pipeline, model_4_pipeline, model_1_id, model_2_id)
+            
+            collection.update_one({"_id": documento["_id"]}, {"$set": risultato})
+        
+        except Exception as e:
+            print(f"Errore nel processare il documento {documento['_id']}: {e}")
+    
+    print("Elaborazione completata!")
