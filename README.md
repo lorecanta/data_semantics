@@ -1,32 +1,52 @@
-# data_semantics
+# Analisi Semantica Forum
 
-# strutttura edel progetto
+## Descrizione del Progetto
+Questo progetto ha lo scopo di estrarre, analizzare e visualizzare dati semantici dal forum PMA https://quelledialfpma.forumfree.it/, utilizzando modelli NLP. I dati vengono salvati in un database MongoDB e possono essere analizzati attraverso report HTML o query manuali.
 
-## utils.py
-ci sono le varie funzioni che servono per glui scripts e notebook
+## Struttura della Cartella
 
-## download.py
-# fai girare solo la prima volta per scaricaere i modelli da hugging face
-1. Importazione delle librerie e moduli
-    ├── Importazione delle funzioni da `utils`
-    ├── Importazione del modulo `os` per la gestione dei file di sistema
-    ├── Importazione di `dotenv` per caricare il file `.env`
+### Notebook Principali
+1. **main_data_storage.ipynb**
+   - Estrazione dei dati dal forum.
+   - Integrazione dei dati con i risultati delle analisi semantiche.
+   - Salvataggio su MongoDB.
+   - Possibilità di selezionare discussioni specifiche e intervalli di date.
 
-2. Caricamento delle variabili d'ambiente dal file `.env`
-    └── Utilizzo di `load_dotenv` per caricare le variabili d'ambiente definite nel file `.env`
+2. **main_analysis_report.ipynb**
+   - Creazione di un report sulle emozioni.
+   - Filtraggio per una specifica tipologia di entità del NER.
+   - Output: un file HTML contenente il report.
 
-3. Recupero del token di autenticazione Hugging Face dal file `.env`
-    └── Lettura della variabile `HUGGINGFACE_TOKEN` tramite `os.getenv()`
+3. **main_analysis_manual_query.ipynb**
+   - Analisi manuale tramite query personalizzate.
+   - Possibilità di esaminare la distribuzione delle emozioni su una discussione senza filtrare con i risultati NER.
 
-4. Definizione dei modelli e dei file da scaricare
-    └── Creazione di un dizionario `models` con ID dei modelli e i relativi file da scaricare
-    └── Lettura delle variabili `MODEL_1_ID`, `MODEL_2_ID`, `MODEL_1_FILES` e `MODEL_2_FILES` dal file `.env`
-    └── Separazione dei nomi dei file tramite `split(",")` per ogni modello
+### Cartelle e File Aggiuntivi
+- **shared/**: Contiene vari file di utils per supportare i processi di estrazione, analisi e salvataggio dei dati.
+- **download.py**: Script per scaricare in locale i modelli semantici da Hugging Face.
 
-5. Funzione principale di esecuzione
-    └── Ciclo che scarica i file per ogni modello definito nel dizionario `models`
-    └── Stampa il messaggio di avvio del download per ogni modello
-    └── Chiamata alla funzione `download_model_files` per scaricare i file specificati
+## Requisiti
+- Assicurati di avere installati i seguenti pacchetti:
+```bash
+pip install -r requirements.txt
+```
+- avere installato MongoDBCompass
 
-## ner_combination.ipynb
-il notebook è parlate e molto breve, vedi quello
+## Utilizzo
+
+1. **Scaricare i modelli NLP**
+   ```bash
+   python download.py
+   ```
+
+2. **Eseguire il notebook di estrazione dati** (`main_data_storage.ipynb`).
+
+3. **Generare un report automatico** con `main_analysis_report.ipynb`.
+
+4. **Eseguire query manuali** con `main_analysis_manual_query.ipynb` per analisi personalizzate.
+
+## Note
+- I dati sono salvati su MongoDB, quindi assicurati che il server Mongo sia attivo.
+- Il progetto utilizza modelli di Hugging Face, che devono essere scaricati prima di eseguire le analisi.
+
+
